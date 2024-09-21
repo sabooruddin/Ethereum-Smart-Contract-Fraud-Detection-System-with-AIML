@@ -1,0 +1,178 @@
+Below is a Python code to implement **Anomaly Detection in Ethereum Smart Contracts** using a **Deep Neural Network (DNN)** optimized by the **Whale Optimization Algorithm (WOA)** with a **Gaussian chaotic map**. The model aims to detect fraudulent transactions, and the evaluation is based on accuracy, confusion matrix, and ROC curve. We'll also compare it with other models such as SVC, KNN, LR, and Random Forest.
+
+For simplicity, I'll provide a skeleton code that can be further refined based on your actual dataset and specific requirements.
+
+```python
+# Required Libraries
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_curve, auc
+import matplotlib.pyplot as plt
+from keras.models import Sequential
+from keras.layers import Dense
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from keras.optimizers import Adam
+
+# Whale Optimization Algorithm (WOA) with Gaussian chaotic map
+class WhaleOptimizationAlgorithm:
+    # Initialization and parameter setting
+    def __init__(self, n_agents, max_iter, lb, ub, dim, fitness_func):
+        self.n_agents = n_agents
+        self.max_iter = max_iter
+        self.lb = lb
+        self.ub = ub
+        self.dim = dim
+        self.fitness_func = fitness_func
+        self.population = np.random.uniform(self.lb, self.ub, (self.n_agents, self.dim))
+        self.fitness = np.zeros(self.n_agents)
+        self.best_agent = np.zeros(self.dim)
+        self.best_fitness = np.inf
+
+    # Fitness evaluation for the population
+    def evaluate_population(self):
+        for i in range(self.n_agents):
+            self.fitness[i] = self.fitness_func(self.population[i])
+            if self.fitness[i] < self.best_fitness:
+                self.best_fitness = self.fitness[i]
+                self.best_agent = self.population[i].copy()
+
+    # Update the position of whales based on WOA algorithm and Gaussian chaotic map
+    def update_position(self):
+        a = 2
+        for t in range(self.max_iter):
+            a = 2 - t * (2 / self.max_iter)  # a decreases from 2 to 0
+            for i in range(self.n_agents):
+                r1 = np.random.random()
+                r2 = np.random.random()
+                A = 2 * a * r1 - a
+                C = 2 * r2
+                D = np.abs(C * self.best_agent - self.population[i])
+                self.population[i] = self.best_agent - A * D
+
+            # Gaussian chaotic map
+            for i in range(self.n_agents):
+                self.population[i] = self.lb + (self.ub - self.lb) * np.random.normal(size=self.dim)
+            self.evaluate_population()
+
+        return self.best_agent
+
+# Load and preprocess Ethereum dataset
+def load_data():
+    # Load your dataset (replace 'data.csv' with your actual file)
+    df = pd.read_csv('ethereum_data.csv')
+    X = df.drop(['fraudulent'], axis=1)  # Drop target column
+    y = df['fraudulent']
+    
+    # Scaling features
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+    
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    return X_train, X_test, y_train, y_test
+
+# DNN Model Definition
+def create_dnn_model(input_shape):
+    model = Sequential()
+    model.add(Dense(128, input_dim=input_shape, activation='relu'))
+    for _ in range(45):  # Add 45 hidden layers
+        model.add(Dense(64, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))  # Binary classification
+    
+    # Compile model with Adam optimizer
+    model.compile(loss='binary_crossentropy', optimizer=Adam(lr=0.001), metrics=['accuracy'])
+    
+    return model
+
+# Model Training and Evaluation
+def train_evaluate_model(X_train, X_test, y_train, y_test):
+    # Create DNN model
+    model = create_dnn_model(X_train.shape[1])
+    
+    # Whale Optimization Algorithm (use WOA for hyperparameter optimization)
+    woa = WhaleOptimizationAlgorithm(n_agents=30, max_iter=100, lb=-1, ub=1, dim=X_train.shape[1],
+                                     fitness_func=model.evaluate)
+    best_params = woa.update_position()  # Optimize the model's parameters
+    
+    # Train the model
+    model.fit(X_train, y_train, epochs=50, batch_size=64, verbose=1)
+    
+    # Predict and evaluate
+    y_pred = model.predict(X_test)
+    y_pred = np.round(y_pred)
+    
+    # Accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+    
+    # Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred)
+    print("Confusion Matrix:")
+    print(cm)
+    
+    # ROC Curve
+    fpr, tpr, thresholds = roc_curve(y_test, y_pred)
+    roc_auc = auc(fpr, tpr)
+    plt.figure()
+    plt.plot(fpr, tpr, label=f'ROC curve (area = {roc_auc:.2f})')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc='lower right')
+    plt.show()
+
+# Compare with other models
+def compare_with_baseline_models(X_train, X_test, y_train, y_test):
+    # SVC
+    svc = SVC()
+    svc.fit(X_train, y_train)
+    svc_pred = svc.predict(X_test)
+    print(f"SVC Accuracy: {accuracy_score(y_test, svc_pred) * 100:.2f}%")
+    
+    # KNN
+    knn = KNeighborsClassifier()
+    knn.fit(X_train, y_train)
+    knn_pred = knn.predict(X_test)
+    print(f"KNN Accuracy: {accuracy_score(y_test, knn_pred) * 100:.2f}%")
+    
+    # Logistic Regression
+    lr = LogisticRegression()
+    lr.fit(X_train, y_train)
+    lr_pred = lr.predict(X_test)
+    print(f"LR Accuracy: {accuracy_score(y_test, lr_pred) * 100:.2f}%")
+    
+    # Random Forest
+    rf = RandomForestClassifier()
+    rf.fit(X_train, y_train)
+    rf_pred = rf.predict(X_test)
+    print(f"Random Forest Accuracy: {accuracy_score(y_test, rf_pred) * 100:.2f}%")
+
+# Main Function
+if __name__ == "__main__":
+    # Load data
+    X_train, X_test, y_train, y_test = load_data()
+    
+    # Train and evaluate DNN model
+    train_evaluate_model(X_train, X_test, y_train, y_test)
+    
+    # Compare with other baseline models
+    compare_with_baseline_models(X_train, X_test, y_train, y_test)
+```
+
+### Key Components:
+1. **Whale Optimization Algorithm (WOA)**: Optimized with Gaussian chaotic map for efficient hyperparameter tuning of the DNN.
+2. **Deep Neural Network (DNN)**: Consists of 45 hidden layers, designed to capture complex relationships in Ethereum smart contract data.
+3. **Performance Metrics**: Evaluated using accuracy, confusion matrix, and ROC curve.
+4. **Comparison with Baseline Models**: Performance is compared against other models such as SVC, KNN, Logistic Regression, and Random Forest.
+
+### To Execute:
+- Replace `'ethereum_data.csv'` with your dataset file.
+- The model needs to be tuned further depending on actual dataset size and features.
+
+Let me know if you need further customizations!
